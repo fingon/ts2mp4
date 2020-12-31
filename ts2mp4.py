@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 11:32:07 2020 mstenber
-# Edit time:     149 min
+# Last modified: Thu Dec 31 11:34:53 2020 mstenber
+# Edit time:     150 min
 #
 """
 
@@ -120,10 +120,13 @@ class VideoConverter:
                             f"-metadata:s:s:{subtitles}", f"language={lang}"])
 
         cmd.extend([
-            # Uniform handling for all audio
+            # Uniform handling for all video+audio
             "-c:v", self.codec, "-preset", self.preset,
-            "-c:a", "aac",
-            "-b:a", "256k",
+
+            #"-c:a", "aac",
+            #"-b:a", "256k",
+            # Size of audio track is unlikely to kill the budget anyway
+            "-c:a", "copy",
 
             # ffmpeg bug workaround with few streams - https://trac.ffmpeg.org/ticket/6375
             "-max_muxing_queue_size", "1024",
