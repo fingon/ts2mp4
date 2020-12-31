@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 10:36:06 2020 mstenber
-# Edit time:     120 min
+# Last modified: Thu Dec 31 10:44:40 2020 mstenber
+# Edit time:     122 min
 #
 """
 
@@ -61,10 +61,12 @@ class VideoConverter:
     def _convert_video(self, tmp_dir):
         src_path = Path(self.filename)
         dst_path = src_path.with_suffix(self.video_suffix)
-        self._archive_epg_srt()
-        sub_path = src_path.with_suffix(".srt")
         if dst_path.exists() and not self.force:
             return
+
+        sub_path = src_path.with_suffix(".srt")
+        if not sub_path.exists():
+            self._archive_epg_srt()
 
         streams = list(self._get_streams())
         subtitles = [
@@ -115,15 +117,15 @@ class VideoConverter:
 
         cmd.append(str(tmp_path))
 
-        print(cmd)
         subprocess.run(cmd, check=True)
         tmp_path.rename(dst_path)
 
     def _archive_epg_srt(self):
         src_path = Path(self.filename)
         src_without_suffix = str(src_path)[:-len(src_path.suffix)]
+        srt_path = src_path.with_suffix(".srt")
         dst_path = src_path.with_suffix(".epg.xml")
-        if dst_path.exists() and not self.force:
+        if dst_path.exists() and srt_path.exists() and not self.force:
             return
         cmd = ["ccextractor", self.filename,
                "-codec", "dvbsub",
