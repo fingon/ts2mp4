@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 10:03:58 2020 mstenber
-# Edit time:     97 min
+# Last modified: Thu Dec 31 10:30:39 2020 mstenber
+# Edit time:     119 min
 #
 """
 
@@ -45,7 +45,7 @@ class VideoConverter:
         # self.preset = "veryslow" ~2fps on test material
         self.codec = "libx265"
         self.video_suffix = ".mp4"
-        self.dvdsub = False
+        self.copy_metadata = False
 
     def _get_streams(self):
         output = subprocess.run(["ffprobe", self.filename],
@@ -65,23 +65,17 @@ class VideoConverter:
         sub_path = src_path.with_suffix(".srt")
         if dst_path.exists() and not self.force:
             return
+
+        streams = list(self._get_streams())
+        subtitles = [
+            stream for stream in streams if stream["type"] == "Subtitle"]
+
         tmp_path = tmp_dir / f"video{self.video_suffix}"
         cmd = ["ffmpeg",
+               "-hide_banner",
                "-i", self.filename,
+               "-i", str(sub_path),
                ]
-        if self.dvdsub:
-            # Fugly DVD subtitles (bitmap, from bitmap dvb_subtitle)
-            subtitles = [
-                x for x in self._get_streams() if x["type"] == "Subtitle"
-            ]
-            for i, r in enumerate(subtitles):
-                if r["subtype"] == "dvb_teletext":
-                    continue
-                cmd.extend(["-map", f"0:s:{i}"])
-            cmd.extend(["-c:s", "dvdsub"])
-        else:
-            # Hopefully prettier OCR'd SRT
-            cmd.extend(["-i", str(sub_path)])
         cmd.extend([
             # Select all video/audio
             "-map", "0:v",
@@ -89,23 +83,38 @@ class VideoConverter:
             "-c:v", self.codec, "-preset", self.preset,
             "-c:a", "aac",
             "-b:a", "256k",
+
+            # we take all subtitles only from srt, and selectively
+            # non-teletext ones from .ts
+            "-map", "1:s",
+            "-c:s", "dvdsub",
+            "-c:s:0", "mov_text",
         ])
-        if not self.dvdsub:
-            cmd.extend(["-map", "1:s",
-                        "-c:s", "mov_text"])
-            lang = None
-            for r in self._get_streams():
-                if r["type"] == "Subtitle" and r["subtype"] != "dvb_teletext":
-                    lang = r["lang"]
-                    break
-            if lang:
-                cmd.extend(["-metadata:s:s:0", f"language={lang}"])
-        cmd.extend([
-            "-map_metadata", "0",
-            "-map_metadata:s:v", "0:s:v",
-            "-map_metadata:s:a", "0:s:a",
-            str(tmp_path)
-        ])
+        lang = None
+        for subtitle in subtitles:
+            if subtitle["subtype"] != "dvb_teletext":
+                lang = subtitle["lang"]
+                break
+        if lang:
+            cmd.extend(["-metadata:s:s:0", f"language={lang}"])
+        for i, subtitle in enumerate(subtitles):
+            if subtitle["subtype"] == "dvb_teletext":
+                continue
+            lang = subtitle["lang"]
+            new_index = i + 1
+            cmd.extend(["-map", f"0:s:{i}",
+                        f"-metadata:s:s:{new_index}", f"language={lang}"])
+
+        # Add metadata as is
+        if self.copy_metadata:
+            cmd.extend([
+                "-map_metadata", "0",
+                "-map_metadata:s:v", "0:s:v",
+                "-map_metadata:s:a", "0:s:a",
+            ])
+
+        cmd.append(str(tmp_path))
+
         print(cmd)
         subprocess.run(cmd, check=True)
         tmp_path.rename(dst_path)
@@ -123,12 +132,16 @@ class VideoConverter:
         subprocess.run(cmd, check=True)
 
     def _archive_dvbsub(self, tmp_dir):
+        # This is probably bad idea. What we really want to do is
+        # actually just store the dvbsubs as dvdsubs as _backups_ in
+        # the new file, after the official subs.
         src_path = Path(self.filename)
         dst_path = src_path.with_suffix(".dvbsub.ts.bz2")
         if dst_path.exists() and not self.force:
             return
         tmp_path = tmp_dir / f"dvbsub.{src_path.suffix}"
         cmd = ["ffmpeg",
+               "-hide_banner",
                "-i", self.filename,
                # Select all video/audio
                "-c", "copy",
@@ -143,7 +156,7 @@ class VideoConverter:
         with tempfile.TemporaryDirectory(dir=Path(self.filename).parent,
                                          prefix="ts2ffmpeg-tmp-") as tmp_dir:
             tmp_dir_path = Path(tmp_dir)
-            self._archive_dvbsub(tmp_dir_path)
+            # self._archive_dvbsub(tmp_dir_path)
             self._archive_epg_srt()
             self._convert_video(tmp_dir_path)
 
