@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 10:30:39 2020 mstenber
-# Edit time:     119 min
+# Last modified: Thu Dec 31 10:36:06 2020 mstenber
+# Edit time:     120 min
 #
 """
 
@@ -122,7 +122,7 @@ class VideoConverter:
     def _archive_epg_srt(self):
         src_path = Path(self.filename)
         src_without_suffix = str(src_path)[:-len(src_path.suffix)]
-        dst_path = Path(f"{src_without_suffix}_epg.xml")
+        dst_path = src_path.with_suffix(".epg.xml")
         if dst_path.exists() and not self.force:
             return
         cmd = ["ccextractor", self.filename,
@@ -130,6 +130,8 @@ class VideoConverter:
                "--nofontcolor",
                "-xmltv", "1", "-xmltvonlycurrent"]
         subprocess.run(cmd, check=True)
+        output_path = Path(f"{src_without_suffix}_epg.xml")
+        output_path.rename(dst_path)
 
     def _archive_dvbsub(self, tmp_dir):
         # This is probably bad idea. What we really want to do is
