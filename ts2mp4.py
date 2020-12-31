@@ -7,7 +7,7 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 09:59:25 2020 mstenber
+# Last modified: Thu Dec 31 10:03:58 2020 mstenber
 # Edit time:     97 min
 #
 """
@@ -88,6 +88,7 @@ class VideoConverter:
             "-map", "0:a",
             "-c:v", self.codec, "-preset", self.preset,
             "-c:a", "aac",
+            "-b:a", "256k",
         ])
         if not self.dvdsub:
             cmd.extend(["-map", "1:s",
