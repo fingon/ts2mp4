@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 11:34:53 2020 mstenber
-# Edit time:     150 min
+# Last modified: Thu Dec 31 12:16:50 2020 mstenber
+# Edit time:     151 min
 #
 """
 
@@ -17,13 +17,14 @@ broadcast to something more sane using ffmpeg.
 
 """
 
-import tempfile
-import bz2
-import shutil
-import subprocess
 from pathlib import Path
+
+import bz2
 import pprint
 import re
+import shutil
+import subprocess
+import tempfile
 
 stream_re = re.compile(
     r"""(?x)
