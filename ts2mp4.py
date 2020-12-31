@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 10:44:40 2020 mstenber
-# Edit time:     122 min
+# Last modified: Thu Dec 31 10:58:46 2020 mstenber
+# Edit time:     129 min
 #
 """
 
@@ -64,20 +64,26 @@ class VideoConverter:
         if dst_path.exists() and not self.force:
             return
 
-        sub_path = src_path.with_suffix(".srt")
-        if not sub_path.exists():
-            self._archive_epg_srt()
-
         streams = list(self._get_streams())
         subtitles = [
             stream for stream in streams if stream["type"] == "Subtitle"]
+        dvb_subtitles = [
+            subtitle for subtitle in subtitles if subtitle["subtype"] != "dvb_teletext"
+        ]
+
+        sub_path = src_path.with_suffix(".srt")
+        if not sub_path.exists() and dvb_subtitles:
+            self._archive_epg_srt()
 
         tmp_path = tmp_dir / f"video{self.video_suffix}"
         cmd = ["ffmpeg",
                "-hide_banner",
                "-i", self.filename,
-               "-i", str(sub_path),
                ]
+        if dvb_subtitles:
+            cmd.extend([
+                "-i", str(sub_path),
+            ])
         cmd.extend([
             # Select all video/audio
             "-map", "0:v",
@@ -85,27 +91,24 @@ class VideoConverter:
             "-c:v", self.codec, "-preset", self.preset,
             "-c:a", "aac",
             "-b:a", "256k",
-
-            # we take all subtitles only from srt, and selectively
-            # non-teletext ones from .ts
-            "-map", "1:s",
-            "-c:s", "dvdsub",
-            "-c:s:0", "mov_text",
         ])
-        lang = None
-        for subtitle in subtitles:
-            if subtitle["subtype"] != "dvb_teletext":
+        if dvb_subtitles:
+            lang = dvb_subtitles[0]["lang"]
+            cmd.extend([
+                # we take all subtitles only from srt, and selectively
+                # non-teletext ones from .ts
+                "-map", "1:s",
+                "-c:s", "dvdsub",
+                "-c:s:0", "mov_text",
+                "-metadata:s:s:0", f"language={lang}",
+            ])
+            for i, subtitle in enumerate(subtitles):
+                if subtitle["subtype"] == "dvb_teletext":
+                    continue
                 lang = subtitle["lang"]
-                break
-        if lang:
-            cmd.extend(["-metadata:s:s:0", f"language={lang}"])
-        for i, subtitle in enumerate(subtitles):
-            if subtitle["subtype"] == "dvb_teletext":
-                continue
-            lang = subtitle["lang"]
-            new_index = i + 1
-            cmd.extend(["-map", f"0:s:{i}",
-                        f"-metadata:s:s:{new_index}", f"language={lang}"])
+                new_index = i + 1
+                cmd.extend(["-map", f"0:s:{i}",
+                            f"-metadata:s:s:{new_index}", f"language={lang}"])
 
         # Add metadata as is
         if self.copy_metadata:
@@ -161,7 +164,7 @@ class VideoConverter:
                                          prefix="ts2ffmpeg-tmp-") as tmp_dir:
             tmp_dir_path = Path(tmp_dir)
             # self._archive_dvbsub(tmp_dir_path)
-            self._archive_epg_srt()
+            # self._archive_epg_srt()
             self._convert_video(tmp_dir_path)
 
 
