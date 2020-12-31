@@ -1,26 +1,29 @@
-# ts2mp4 #
+# ts2mp4
 
 ## What is it?
 
 This is minimal tool mostly for my own amusement, which converts .ts files
 I get off terrestial (DVB-C) television in Finland using tvheadend +
-Hauppauge dual tuner USB stick running in Raspberry Pi 4.
+Hauppauge dual tuner USB stick running in Raspberry Pi 4. For video
+conversion, I use desktop, as x265
 
-The output contains:
+What tvheadend produces seems to be at (at least for me):
 
 - h264 video stream
-- ac3 audio stream
+- ac3 audio stream (sometimes also some other format(s))
 - dvb subtitle track(s)
 - dvb teletext track
 
-And what I want out of it is x265 encoded video stream with aac audio
-stream (of moderate bitrate but using default not-so-high-quality encoder).
-The tricky part are subtitles; I want them in neat, scalable format instead
-of dvb subtitle which is binary.
+This script uses ccextractor and ffmpeg to produce libx265 encoded video
+stream with original audio, and OCR'd "nicely readable" subtitle
+track. Additionally original subtitle tracks are also included, but they're
+unfortunately encoded as dvd subtexts (= images, not text).
 
-So what is done is:
+## How to use it
 
-- run ccextractor to produce .srt (and grab EPG data out of .ts while at
-it)
+- install ccextractor ( https://www.ccextractor.org ) *with* tesseract
+support (required to make OCR of DVB subtitles possible)
 
-- ffmpeg the .srt back to new .mp4, alongside the old dvb subtitles as backups
+- install ffmpeg ( https://ffmpeg.org )
+
+- run `python3 ts2mp4.py file.ts` and get `file.mp4` (and potentially also `file.srt` and `file.epg.xml`) .. eventually
