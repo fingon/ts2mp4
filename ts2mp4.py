@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Thu Dec 31 10:58:46 2020 mstenber
-# Edit time:     129 min
+# Last modified: Thu Dec 31 11:32:07 2020 mstenber
+# Edit time:     149 min
 #
 """
 
@@ -22,6 +22,7 @@ import bz2
 import shutil
 import subprocess
 from pathlib import Path
+import pprint
 import re
 
 stream_re = re.compile(
@@ -84,31 +85,49 @@ class VideoConverter:
             cmd.extend([
                 "-i", str(sub_path),
             ])
+
+        sti = {}
+        subtitles = 0
+        for stream in streams:
+            mapsource = "%s:%s" % (stream["input"], stream["stream"]
+                                   )
+            type_index = sti.setdefault(stream["type"], 0)
+            sti[stream["type"]] = type_index + 1
+            if stream["type"] == "Video":
+                cmd.extend(["-map", mapsource])
+            elif stream["type"] == "Audio":
+                cmd.extend(["-map", mapsource])
+                lang = stream["lang"]
+                if lang:
+                    cmd.extend(
+                        [f"-metadata:s:a:{type_index}", f"language={lang}"])
+            elif stream["type"] == "Subtitle":
+                # Drop teletext on the floor
+                if stream["subtype"] == "dvb_teletext":
+                    continue
+                lang = stream["lang"]
+                if type_index == 0:
+                    cmd.extend([
+                        # we take all subtitles only from srt, and selectively
+                        # non-teletext ones from .ts
+                        "-map", "1:s",
+                        "-c:s:0", "mov_text",
+                        "-metadata:s:s:0", f"language={lang}",
+                    ])
+                subtitles += 1
+                cmd.extend(["-map", mapsource,
+                            f"-c:s:{subtitles}", "dvdsub",
+                            f"-metadata:s:s:{subtitles}", f"language={lang}"])
+
         cmd.extend([
-            # Select all video/audio
-            "-map", "0:v",
-            "-map", "0:a",
+            # Uniform handling for all audio
             "-c:v", self.codec, "-preset", self.preset,
             "-c:a", "aac",
             "-b:a", "256k",
+
+            # ffmpeg bug workaround with few streams - https://trac.ffmpeg.org/ticket/6375
+            "-max_muxing_queue_size", "1024",
         ])
-        if dvb_subtitles:
-            lang = dvb_subtitles[0]["lang"]
-            cmd.extend([
-                # we take all subtitles only from srt, and selectively
-                # non-teletext ones from .ts
-                "-map", "1:s",
-                "-c:s", "dvdsub",
-                "-c:s:0", "mov_text",
-                "-metadata:s:s:0", f"language={lang}",
-            ])
-            for i, subtitle in enumerate(subtitles):
-                if subtitle["subtype"] == "dvb_teletext":
-                    continue
-                lang = subtitle["lang"]
-                new_index = i + 1
-                cmd.extend(["-map", f"0:s:{i}",
-                            f"-metadata:s:s:{new_index}", f"language={lang}"])
 
         # Add metadata as is
         if self.copy_metadata:
@@ -119,7 +138,7 @@ class VideoConverter:
             ])
 
         cmd.append(str(tmp_path))
-
+        pprint.pprint(cmd)
         subprocess.run(cmd, check=True)
         tmp_path.rename(dst_path)
 
