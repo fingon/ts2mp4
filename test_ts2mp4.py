@@ -7,14 +7,18 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Thu Dec 31 09:20:57 2020 mstenber
-# Last modified: Thu Dec 31 09:34:12 2020 mstenber
-# Edit time:     7 min
+# Last modified: Mon Jan  4 09:09:56 2021 mstenber
+# Edit time:     8 min
 #
 """
 
+Unit tests for (simply testable) parts of ts2mp4.
+
 """
 
-from ts2mp4 import VideoConverter
+# pylint: disable=line-too-long
+
+import ts2mp4
 
 TEST_INPUT_1 = """
     Stream #0:0[0x13a]: Video: h264 (Main) ([27][0][0][0] / 0x001B), yuv420p(tv, bt709, top first), 1920x1080 [SAR 1:1 DAR 16:9], 25 fps, 50 tbr, 90k tbn, 50 tbc
@@ -26,8 +30,7 @@ TEST_INPUT_1 = """
 
 
 def test_video_converter():
-    vc = VideoConverter(filename="test.ts")
-    l = list(vc._parse_streams(TEST_INPUT_1))
+    l = list(ts2mp4.parse_streams(TEST_INPUT_1))
     exp = [
         {'input': '0',
          'stream': '0',
