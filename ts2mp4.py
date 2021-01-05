@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Mon Jan  4 09:55:43 2021 mstenber
-# Edit time:     201 min
+# Last modified: Tue Jan  5 11:31:27 2021 mstenber
+# Edit time:     257 min
 #
 """
 
@@ -19,6 +19,7 @@ broadcast to something more sane using ffmpeg.
 
 import argparse
 import bz2
+import json
 import pprint
 import re
 import shutil
@@ -33,7 +34,7 @@ stream_re = re.compile(
   \s*
   Stream\s+\#(?P<input>\d+):(?P<stream>\d+)
   \[0x[0-9a-f]+\](\((?P<lang>\S+)\))?:\s+
-  (?P<type>\S+):\s+(?P<subtype>\S+)\s+
+  (?P<codec_type>\S+):\s+(?P<codec_name>\S+)\s+
   (?P<rest>.*)
 $"""
 )
@@ -52,9 +53,22 @@ class VideoConverter:
         self.filename = filename
 
     def _get_streams(self):
-        output = subprocess.run(["ffprobe", self.filename],
-                                capture_output=True, check=True).stderr.decode()
-        yield from parse_streams(output)
+        result = subprocess.run(["ffprobe", "-show_streams", "-v", "fatal", "-of",
+                                 "json", self.filename], capture_output=True, check=True)
+        output = result.stdout.decode()
+        data = json.loads(output)
+        for stream in data["streams"]:
+            yield {
+                "codec_name": stream["codec_name"],
+                "codec_type": stream["codec_type"],
+                "disposition": {
+                    k: v for k, v in stream["disposition"].items() if v
+                },
+                "lang": stream.get("tags", {}).get("language"),
+                "stream": stream["index"],
+            }
+        # alternatively could use raw output parse_streams; however,
+        # it does not contain disposition
 
     def _convert_video(self, tmp_dir):
         src_path = Path(self.filename)
@@ -63,10 +77,10 @@ class VideoConverter:
             return
 
         streams = list(self._get_streams())
-        subtitles = [
-            stream for stream in streams if stream["type"] == "Subtitle"]
+        all_subtitles = [
+            stream for stream in streams if stream["codec_type"].lower() == "subtitle"]
         dvb_subtitles = [
-            subtitle for subtitle in subtitles if subtitle["subtype"] != "dvb_teletext"
+            subtitle for subtitle in all_subtitles if subtitle["codec_name"] != "dvb_teletext"
         ]
 
         sub_path = src_path.with_suffix(".srt")
@@ -78,6 +92,8 @@ class VideoConverter:
                "-hide_banner",
                "-i", self.filename,
                ]
+        if self.args.report:
+            cmd.append("-report")
         if dvb_subtitles:
             cmd.extend([
                 "-i", str(sub_path),
@@ -86,18 +102,19 @@ class VideoConverter:
         sti = {}
         subtitles = 0
         dest_index = 0
+
         for stream in streams:
-            input_number = stream["input"]
             stream_number = stream["stream"]
-            mapsource = f"{input_number}:{stream_number}"
-            type_index = sti.setdefault(stream["type"], 0)
-            sti[stream["type"]] = type_index + 1
+            codec_type = stream["codec_type"].lower()
+            mapsource = f"0:{stream_number}"
+            type_index = sti.setdefault(stream["codec_type"], 0)
+            sti[codec_type] = type_index + 1
             metadata = []
-            if stream["type"] in ["Video", "Audio"]:
+            if codec_type in ["video", "audio"]:
                 cmd.extend(["-map", mapsource])
-            elif stream["type"] == "Subtitle":
+            elif codec_type == "subtitle":
                 # Drop teletext on the floor
-                if stream["subtype"] == "dvb_teletext":
+                if stream["codec_name"] == "dvb_teletext":
                     continue
                 lang = stream["lang"]
                 if type_index == 0:
@@ -113,11 +130,22 @@ class VideoConverter:
                 subtitles += 1
                 cmd.extend(["-map", mapsource,
                             f"-c:s:{subtitles}", "dvdsub"])
+
             # Add extra metadata we produce (TBD if we ever want to remove any?)
             if metadata:
                 for entry in metadata:
                     cmd.extend([f"-metadata:s:{dest_index}", entry])
             dest_index += 1
+
+            # Handle disposition; By default it is whatever was in the source or 0 if none
+            disposition_dict = stream["disposition"]
+            if not disposition_dict:
+                disposition = "0"
+            else:
+                assert len(disposition_dict) == 1
+                # TBD how to handle more than one key?
+                disposition = next(iter(disposition_dict.keys()))
+            cmd.extend([f"-disposition:s:{dest_index}", disposition])
 
         cmd.extend([
             # Uniform handling for all video+audio
@@ -135,7 +163,7 @@ class VideoConverter:
             cmd.extend(["-b:a", self.args.audio_bitrate])
 
         cmd.extend([
-            # "-map_metadata:g", "0:g",  # copy global metadata # default
+            "-map_metadata:g", "0:g",  # copy global metadata # default
             "-empty_hdlr_name", "1",  # omit dummy handler name fields
             str(tmp_path)])
         pprint.pprint(cmd)
@@ -144,7 +172,7 @@ class VideoConverter:
         # with garbage and ffmpeg returns nonzero return code. TBD if
         # there's some way to ignore it, for now, we just assume files
         # don't shrink to sub-percent size and copy those over.
-        if tmp_path.exists() and tmp_path.stat().st_size > dst_path.stat().st_size / 100:
+        if tmp_path.exists() and tmp_path.stat().st_size > src_path.stat().st_size / 100:
             tmp_path.rename(dst_path)
         else:
             sys.exit(1)
@@ -199,18 +227,23 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("filename", metavar="TS-FILE", nargs="+",
                    help="Path to .ts file(s) to convert")
-    p.add_argument("--video-codec", help="Video codec to use (or 'copy' to leave it unchanged)",
+    p.add_argument("--video-codec", "--vc",
+                   help="Video codec to use (or 'copy' to leave it unchanged)",
                    default="libx265")
-    p.add_argument("--video-preset", help="Video codec preset",
+    p.add_argument("--video-preset", "--vp", help="Video codec preset",
                    default="slow")
     p.add_argument("--video-suffix", help="Video suffix to use",
                    default=".mp4")
-    p.add_argument("--audio-codec", help="Audio codec to use (or 'copy' to leave it unchanged)",
+    p.add_argument("--audio-codec", "--ac",
+                   help="Audio codec to use (or 'copy' to leave it unchanged)",
                    default="copy")
-    p.add_argument("--audio-bitrate", help="Audio bitrate to use (if not 'copy' codec)",
+    p.add_argument("--audio-bitrate", "--ab",
+                   help="Audio bitrate to use (if not 'copy' codec)",
                    default="256k")
     p.add_argument("--force", "-f", action="store_true",
                    help="Redo steps even if results exist")
+    p.add_argument("--report", "-r", action="store_true",
+                   help="Produce ffmpeg reports of what went wrong")
     args = p.parse_args()
     for filename in args.filename:
         vc = VideoConverter(filename=filename, args=args)

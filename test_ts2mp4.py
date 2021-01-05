@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Thu Dec 31 09:20:57 2020 mstenber
-# Last modified: Mon Jan  4 09:09:56 2021 mstenber
-# Edit time:     8 min
+# Last modified: Mon Jan  4 10:08:38 2021 mstenber
+# Edit time:     11 min
 #
 """
 
@@ -36,32 +36,32 @@ def test_video_converter():
          'stream': '0',
          'lang': None,
          'rest': '(Main) ([27][0][0][0] / 0x001B), yuv420p(tv, bt709, top first), 1920x1080 [SAR 1:1 DAR 16:9], 25 fps, 50 tbr, 90k tbn, 50 tbc',
-         'subtype': 'h264',
-         'type': 'Video',
+         'codec_name': 'h264',
+         'codec_type': 'Video',
          },
         {'input': '0',
          'lang': 'swe',
          'rest': '(AC-3 / 0x332D4341), 48000 Hz, 5.1(side), fltp, 448 kb/s',
          'stream': '1',
-         'subtype': 'ac3',
-         'type': 'Audio'},
+         'codec_name': 'ac3',
+         'codec_type': 'Audio'},
         {'input': '0',
          'lang': 'fin',
          'rest': '([6][0][0][0] / 0x0006)',
          'stream': '2',
-         'subtype': 'dvb_subtitle',
-         'type': 'Subtitle'},
+         'codec_name': 'dvb_subtitle',
+         'codec_type': 'Subtitle'},
         {'input': '0',
          'lang': 'swe',
          'rest': '([6][0][0][0] / 0x0006) (hearing impaired)',
          'stream': '4',
-         'subtype': 'dvb_subtitle',
-         'type': 'Subtitle'},
+         'codec_name': 'dvb_subtitle',
+         'codec_type': 'Subtitle'},
         {'input': '0',
          'lang': 'fin',
          'rest': '([6][0][0][0] / 0x0006)',
          'stream': '5',
-         'subtype': 'dvb_teletext',
-         'type': 'Subtitle'},
+         'codec_name': 'dvb_teletext',
+         'codec_type': 'Subtitle'},
     ]
     assert exp == l
