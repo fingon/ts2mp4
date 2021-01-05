@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Tue Jan  5 11:31:27 2021 mstenber
-# Edit time:     257 min
+# Last modified: Tue Jan  5 11:32:26 2021 mstenber
+# Edit time:     258 min
 #
 """
 
@@ -236,7 +236,7 @@ def main():
                    default=".mp4")
     p.add_argument("--audio-codec", "--ac",
                    help="Audio codec to use (or 'copy' to leave it unchanged)",
-                   default="copy")
+                   default="aac")
     p.add_argument("--audio-bitrate", "--ab",
                    help="Audio bitrate to use (if not 'copy' codec)",
                    default="256k")
