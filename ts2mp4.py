@@ -7,8 +7,8 @@
 # Copyright (c) 2020 Markus Stenberg
 #
 # Created:       Wed Dec 30 21:03:16 2020 mstenber
-# Last modified: Tue Jan  5 11:32:26 2021 mstenber
-# Edit time:     258 min
+# Last modified: Tue Jan  5 16:41:39 2021 mstenber
+# Edit time:     275 min
 #
 """
 
@@ -94,13 +94,13 @@ class VideoConverter:
                ]
         if self.args.report:
             cmd.append("-report")
-        if dvb_subtitles:
+        if dvb_subtitles and not self.args.no_srt:
             cmd.extend([
                 "-i", str(sub_path),
             ])
 
         sti = {}
-        subtitles = 0
+        subtitles = 0 if not self.args.no_srt else -1
         dest_index = 0
 
         for stream in streams:
@@ -118,19 +118,21 @@ class VideoConverter:
                     continue
                 lang = stream["lang"]
                 if type_index == 0:
-                    # This is 'bonus' stream not accounted for in the sti
-                    cmd.extend([
-                        # we take all subtitles only from srt, and selectively
-                        # non-teletext ones from .ts
-                        "-map", "1:s",
-                        "-c:s:0", "mov_text",
-                        "-metadata:s:s:0", f"language={lang}",
-                    ])
-                    dest_index += 1
+                    if not self.args.no_srt:
+                        # This is 'bonus' stream not accounted for in the sti
+                        cmd.extend([
+                            # we take all subtitles only from srt, and selectively
+                            # non-teletext ones from .ts
+                            "-map", "1:s",
+                            "-c:s:0", "mov_text",
+                            "-metadata:s:s:0", f"language={lang}",
+                        ])
+                        dest_index += 1
                 subtitles += 1
                 cmd.extend(["-map", mapsource,
                             f"-c:s:{subtitles}", "dvdsub"])
-
+            print(
+                f"Output stream #{dest_index} from #{mapsource}: {codec_type}")
             # Add extra metadata we produce (TBD if we ever want to remove any?)
             if metadata:
                 for entry in metadata:
@@ -244,6 +246,9 @@ def main():
                    help="Redo steps even if results exist")
     p.add_argument("--report", "-r", action="store_true",
                    help="Produce ffmpeg reports of what went wrong")
+    p.add_argument("--no-srt", "--ns", action="store_true",
+                   help="Disable SRT extraction (and therefore also mov_text)")
+
     args = p.parse_args()
     for filename in args.filename:
         vc = VideoConverter(filename=filename, args=args)
